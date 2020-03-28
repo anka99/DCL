@@ -63,15 +63,19 @@ section .text
 %endmacro
 
 ;pointer to letter shifted, shift value
-%macro shift_letter 2
+%macro right_shift_letter 2
         add     [%1], %2
-        cmp     [%1], 0
-        jge      %%compare_42
-        add     [%1], ARG_LENGTH
-%%compare_42:
-        cmp     [%1], ARG_LENGTH
-        je      %%end    
-        sub     [%1], ARG_LENGTH 
+        cmp     byte [%1], ARG_LENGTH
+        jl      %%end    
+        sub     byte [%1], ARG_LENGTH 
+%%end:
+%endmacro
+
+%macro left_shift_letter 2
+        sub     [%1], %2
+        cmp     byte [%1], 0
+        jge      %%end
+        add     byte [%1], ARG_LENGTH
 %%end:
 %endmacro
 
@@ -92,8 +96,8 @@ section .text
 ;pointer to letter, pointer to the beggining of array
 %macro perm_letter 2
         push    rdi
-        mov     rdi, [%1]
-        mov     [%1], [%2 + rdi]
+        lea     rdi, [%2 + %1]
+        mov     [%1], rdi
         pop     rdi
 %endmacro
        
@@ -134,45 +138,56 @@ _read_input:
 _encrypt:
         push    rbx
         push    rcx
+        push    rdx
+        push    r9
         mov     rbx, 0 ;iterator
-        mov     rcx, buffer
+        mov     rcx, buffer ;
         reval_arr buffer, [text_length], LOW, buffer ;decrease value of letters to [0;42)
+        mov     rsi, [arr_key] ;l value
+        mov     rdi, [arr_key + 1] ;r value
+        lea     rdx, [arr_key] ; l pointer
+        lea     r9 , [arr_key + 1] ;r pointer
 encrypt_loop:
-        lea     r8, [rcx + rbx] ;
-        lea     rsi, [arr_key] ;l
-        lea     rdi, [arr_key + 1] ;r
+        cmp     rbx, [text_length]
+        je      encrypt_loop_end
 
-        shift_letter  r8, [rdi] ;Qr
-        perm_letter r8, arr_r  ;R
-        shift_letter r8, -1 * rdi    ;Qr^-1
-        shift_letter r8, rsi   ;Ql
-        perm_letter r8, arr_l;L
-        shift_letter r8, -1 * rsi;Ql^-1
-        perm_letter r8, arr_t;T
-        shift_letter r8, rsi;Ql
-        perm_letter  r8, arr_l_rev;L^-1
-        shift_letter r8, -1 * rsi ;Ql^-1
-        shift_letter r8, rdi;Qr
-        perm_letter r8, arr_r_rev;R^-1
-        shift_letter r8, -1 * rdi;Qr^-1
+        lea     r8, [buffer + rbx] ;move poiner to the encrypted char to r8
+        right_shift_letter  r8, rdi ;Qr
         
-        shift_letter rdi, 1
+        ; perm_letter r8, arr_r  ;R
+        ; left_shift_letter r8, rdi    ;Qr^-1
+        ; right_shift_letter r8, rsi   ;Ql
+        ; perm_letter r8, arr_l ;L
+        ; left_shift_letter r8, rsi;Ql^-1
+        ; perm_letter r8, arr_t;T
+        ; right_shift_letter r8, rsi;Ql
+        ; perm_letter  r8, arr_l_rev;L^-1
+        ; left_shift_letter r8, rsi ;Ql^-1
+        ; right_shift_letter r8, rdi ;Qr
+        ; perm_letter r8, arr_r_rev;R^-1
+        ; left_shift_letter r8, rdi;Qr^-1
+        
+        ;right_shift_letter ;r++ 
 encrypt_loop_posR:
-        cmp     [rdi], R
+        cmp     byte[rdi, R
         jne     encrypt_loop_posL
-        shift_letter rsi, 1
+        right_shift_letter rsi, byte 1
 encrypt_loop_posL:
-        cmp     [rdi], L
-        jne     encrypt_loop_posL
-        shift_letter rsi, 1
+        cmp     byte [rdi], L
+        jne     encrypt_loop_posT
+        right_shift_letter rsi, byte 1
 encrypt_loop_posT:
-        cmp     [rdi], T
-        jne     encrypt_loop_posL
-        shift_letter rsi, 1
+        cmp     [rdi], byte T
+        jne     encrypt_loop_inc
+        right_shift_letter rsi, byte 1
 
+encrypt_loop_inc:
         inc     rbx
+        jmp     encrypt_loop
 encrypt_loop_end:
         reval_arr buffer, [text_length], -49, buffer ;increase value of letters to the original one
+        pop     r9
+        pop     rdx
         pop     rcx
         pop     rbx
         ret
@@ -185,8 +200,8 @@ _print_result:
         push    rsi
         mov     rax, SYS_WRITE
         mov     rdi, STDOUT
-        mov     rsi, arr_l
-        mov     rdx, 42
+        mov     rsi, buffer
+        mov     rdx, [text_length]
         syscall
         pop     rsi
         pop     rdi
@@ -290,6 +305,6 @@ check_perm_end_loop:
         ret
 
 _my_exit:
-        mov     rdi, [arr_l + 1]
+        mov     rdi, rbx
         mov     eax, SYS_EXIT
         syscall
