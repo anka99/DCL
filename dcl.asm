@@ -82,16 +82,23 @@ section .text
 
 ;perm, conainer, length
 %macro reverse_perm 3
+        push    rdi
+        push    rsi
+        push    rcx
         xor     rsi, rsi ;set itarator to 0
         xor     rdi, rdi ;set letter to 0
-%loop:
+%%loop:
         cmp     rsi, %3 
-        je      %end 
-        mov     rsi, [%1 + rdi] ;mov current perm sign to rsi
-        mov     [%2 + rsi], rdi ;mov position of rsi sign on rsi'th place in container
+        je      %%end 
+        mov     dil, [%1 + rsi] ;mov current perm sign to rdi
+        lea     rcx, [%2 + rdi]
+        mov     [rcx], sil ;mov position of rdi sign on rdi'th place in container
         inc     rsi
-        jmp
-%end:
+        jmp     %%loop
+%%end:
+        pop     rcx
+        pop     rsi
+        pop     rdi
 %endmacro
 
 ;pointer to letter, pointer to the beggining of array
@@ -108,7 +115,8 @@ _start:
         mov     rax, ARGC               ;store number of args in rax
         lea     rbp, [rsp]
         call    _check_args
-
+        reverse_perm arr_l, arr_l_rev, ARG_LENGTH
+        reverse_perm arr_r, arr_r_rev, ARG_LENGTH
 start_loop:
         call    _read_input             ;set rax on number of read bytes
         mov     [text_length], rax
@@ -154,9 +162,31 @@ encrypt_loop:
         cmp     rbx, [text_length]
         je      encrypt_loop_end ;end the loop if iterator reaches text length
 
+        mov     r11, 1
+        right_shift_letter r9, r11b ;r++ 
+encrypt_loop_posR:
+        cmp     byte [r9], R
+        jne     encrypt_loop_posL
+        right_shift_letter rdx, r11b ;l++
+encrypt_loop_posL:
+        cmp     byte [r9], L
+        jne     encrypt_loop_posT
+        right_shift_letter rdx, r11b ; l++
+encrypt_loop_posT:
+        cmp     [r9], byte T
+        jne     encrypt_loop_main
+        right_shift_letter rdx, r11b ;l++ 
+
+encrypt_loop_main:
         mov     rsi, [arr_key] ;l value
         mov     rdi, [arr_key + 1] ;r value
         lea     r8, [buffer + rbx] ;move poiner to the encrypted char to r8
+
+        cmp     byte [r8], 0 ;user input validation
+        jl      exit_1
+
+        cmp     byte [r8], ARG_LENGTH
+        jge     exit_1
 
         right_shift_letter  r8, dil ;Qr
         perm_letter r8, arr_r  ;R
@@ -172,23 +202,7 @@ encrypt_loop:
         perm_letter r8, arr_r_rev;R^-1
         left_shift_letter r8, dil;Qr^-1
         
-        mov     r11, 1
-        right_shift_letter r9, r11b;r++ 
-encrypt_loop_posR:
-        cmp     byte [r9], R
-        jne     encrypt_loop_posL
-        right_shift_letter rdx, byte 1
-encrypt_loop_posL:
-        cmp     byte [r9], L
-        jne     encrypt_loop_posT
-        right_shift_letter rdx, byte 1
-encrypt_loop_posT:
-        cmp     [r9], byte T
-        jne     encrypt_loop_inc
-        mov     r11, 1
-        right_shift_letter rdx, r11
 
-encrypt_loop_inc:
         inc     rbx
         jmp     encrypt_loop
 encrypt_loop_end:
