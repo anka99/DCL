@@ -34,8 +34,6 @@ section .text
 
 ;arguments: pointer to array start, array length, value subtracted, destination pointer
 %macro reval_arr 4
-        ; push    r13
-        ; push    r14
         mov     rdi, %1 ;pointer to array start
         mov     r14, %2 ;array length
         mov     rdx, %3 ;value subtracted 
@@ -50,26 +48,25 @@ section .text
         inc     rcx
         jmp     %%reval_arr_loop
 %%reval_arr_end:
-        ; pop     r14
-        ; pop     r13
 %endmacro
 
-;pointer to letter shifted, shift value
-%macro right_shift_letter 2
+;8-bit value of letter, shift value, 32-bit value of letter
+%macro right_shift_letter 3
         add     %1, %2
+        mov     r15d, %3
+        sub     r15d, ARG_LENGTH
         cmp     %1, ARG_LENGTH
-        jl      %%end    
-        sub     %1, ARG_LENGTH 
-%%end:
+        cmovge  %3, r15d
 %endmacro
 
-;pointer to letter shifted, shift value
-%macro left_shift_letter 2
-        cmp     %1, %2
-        jge     %%sub
+;8-bit value of letter, shift value, 32-bit value of letter
+%macro left_shift_letter 3
         add     %1, ARG_LENGTH
-%%sub:
         sub     %1, %2
+        mov     r15d, %3
+        sub     r15b, ARG_LENGTH
+        cmp     %1, ARG_LENGTH
+        cmovge  %3, r15d
 %endmacro
 
 ;perm, conainer, length
@@ -92,16 +89,6 @@ section .text
         pop     rsi
         pop     rdi
 %endmacro
-
-;pointer to letter, pointer to the beggining of array
-%macro perm_letter 2
-        ;push    r15
-        xor     r15, r15
-        mov     r15b, %1
-        mov     r15b, [%2 + r15]
-        mov     %1, r15b
-        ;pop     r15
-%endmacro
        
 _start:
         mov     rax, ARGC               ;store number of args in rax
@@ -111,10 +98,10 @@ _start:
         reverse_perm arr_r, arr_r_rev, ARG_LENGTH
 start_loop:
         call    _read_input             ;set rax on number of read bytes
-        mov     [text_length], rax
+        mov     r12, rax
         call    _encrypt
         call    _print_result
-        cmp     qword [text_length], BUFFER_LENGTH ;TODO: possible error with byte
+        cmp     qword r12, BUFFER_LENGTH ;TODO: possible error with byte
         je      start_loop              ;continue reading
 exit_0:
         mov     eax, SYS_EXIT
@@ -137,34 +124,34 @@ _encrypt:
         xor     rdi, rdi
         xor     rsi, rsi
         xor     r11, r11
+        xor     r13, r13
         mov     rbx, 0 ;iterator
-        reval_arr buffer, [text_length], LOW, buffer ;decrease value of letters to [0;42)
+        reval_arr buffer, r12, LOW, buffer ;decrease value of letters to [0;42)
         lea     rdx, [arr_key] ;l pointer
         lea     r9, [arr_key + 1] ;r pointer
 
         mov     sil, [arr_key] ;l value
         mov     dil, [arr_key + 1] ;r value
 encrypt_loop:
-        cmp     rbx, [text_length]
+        cmp     rbx, r12
         je      encrypt_loop_end ;end the loop if iterator reaches text length
-        
-        ; mov     sil, [arr_key] ;l value
-        ; mov     dil, [arr_key + 1] ;r value
 
+        mov     r13, sil
         mov     r11, 1
-        right_shift_letter dil, r11b ;r++ 
+        right_shift_letter sil, r11b, esi
+        right_shift_letter dil, r11b, edi ;r++ 
 encrypt_loop_posR:
         cmp     byte dil, R
         jne     encrypt_loop_posL
-        right_shift_letter sil, r11b ;l++
+        right_shift_letter sil, r11b, esi ;l++
 encrypt_loop_posL:
         cmp     byte dil, L
         jne     encrypt_loop_posT
-        right_shift_letter sil, r11b ; l++
+        right_shift_letter sil, r11b, esi ; l++
 encrypt_loop_posT:
         cmp     byte dil, T
         jne     encrypt_loop_main
-        right_shift_letter sil, r11b ;l++ 
+        right_shift_letter sil, r11b, esi ;l++ 
         ;align   16
 encrypt_loop_main:
         mov     [rdx], sil ;actualize l
@@ -178,19 +165,19 @@ encrypt_loop_main:
         cmp     byte r8b, ARG_LENGTH
         jge     exit_1
 
-        right_shift_letter  r8b, dil    ;Qr
-        perm_letter r8b, arr_r          ;R
-        left_shift_letter r8b, dil      ;Qr^-1
-        right_shift_letter r8b, sil     ;Ql
-        perm_letter r8b, arr_l          ;L
-        left_shift_letter r8b, sil      ;Ql^-1
-        perm_letter r8b, arr_t          ;T
-        right_shift_letter r8b, sil     ;Ql
-        perm_letter  r8b, arr_l_rev     ;L^-1
-        left_shift_letter r8b, sil      ;Ql^-1
-        right_shift_letter r8b, dil     ;Qr
-        perm_letter r8b, arr_r_rev      ;R^-1
-        left_shift_letter r8b, dil      ;Qr^-1
+        right_shift_letter  r8b, dil, r8d ;Qr
+        mov     r8b, [arr_r + r8] ;R
+        left_shift_letter r8b, dil, r8d      ;Qr^-1
+        right_shift_letter r8b, sil, r8d    ;Ql
+        mov     r8b, [arr_l + r8] ;L
+        left_shift_letter r8b, sil, r8d      ;Ql^-1
+        mov     r8b, [arr_t + r8] ;T
+        right_shift_letter r8b, sil, r8d     ;Ql
+        mov     r8b, [arr_l_rev + r8] ;L^-1
+        left_shift_letter r8b, sil, r8d      ;Ql^-1
+        right_shift_letter r8b, dil, r8d     ;Qr
+        mov     r8b, [arr_r_rev + r8] ;R^-1
+        left_shift_letter r8b, dil, r8d      ;Qr^-1
 
         mov     [buffer + rbx], r8b
         inc     rbx
@@ -198,14 +185,14 @@ encrypt_loop_main:
 encrypt_loop_end:
         mov     [arr_key], sil ;l value
         mov     [arr_key + 1], dil ;r value
-        reval_arr buffer, [text_length], -49, buffer ;increase value of letters to the original one
+        reval_arr buffer, r12, -49, buffer ;increase value of letters to the original one
         ret
 
 _print_result:
         mov     rax, SYS_WRITE
         mov     rdi, STDOUT
         mov     rsi, buffer
-        mov     rdx, [text_length]
+        mov     rdx, r12
         syscall
         ret
 _check_args:
