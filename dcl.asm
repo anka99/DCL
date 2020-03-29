@@ -134,27 +134,26 @@ exit_1:
         syscall
 
 _read_input:
-        push    rdi
-        push    rsi
-        push    rdx
+        ; push    rdi
+        ; push    rsi
+        ; push    rdx
         mov     rax, 0
         mov     rdi, 0
         mov     rsi, buffer
         mov     rdx, BUFFER_LENGTH
         syscall
-        pop     rdx
-        pop     rsi
-        pop     rdi
+        ; pop     rdx
+        ; pop     rsi
+        ; pop     rdi
         ret
 _encrypt:
-        push    rbx
-        push    rcx
-        push    rdx
-        push    r9
+        ; push    rbx
+        ; push    rcx
+        ; push    rdx
+        ; push    r9
         xor     rdi, rdi
         xor     rsi, rsi
         mov     rbx, 0 ;iterator
-        mov     rcx, buffer ;
         reval_arr buffer, [text_length], LOW, buffer ;decrease value of letters to [0;42)
         lea     rdx, [arr_key] ; l pointer
         lea     r9 , [arr_key + 1] ;r pointer
@@ -207,79 +206,79 @@ encrypt_loop_main:
         jmp     encrypt_loop
 encrypt_loop_end:
         reval_arr buffer, [text_length], -49, buffer ;increase value of letters to the original one
-        pop     r9
-        pop     rdx
-        pop     rcx
-        pop     rbx
+        ; pop     r9
+        ; pop     rdx
+        ; pop     rcx
+        ; pop     rbx
         ret
 
 ;pointer to letter, pointer to array with permutiation
 
 _print_result:
-        push    rax
-        push    rdi
-        push    rsi
+        ; push    rax
+        ; push    rdi
+        ; push    rsi
         mov     rax, SYS_WRITE
         mov     rdi, STDOUT
         mov     rsi, buffer
         mov     rdx, [text_length]
         syscall
-        pop     rsi
-        pop     rdi
-        pop     rax
+        ; pop     rsi
+        ; pop     rdi
+        ; pop     rax
         ret
 _check_args:
-        cmp     rax, [rbp]
+        cmp     rax, [rbp]      ;if number of arguments is invalid - exit 1
         jne     exit_1
-        mov     r9, 0
-        mov     r8, ARG_LENGTH
+        mov     r9, 0           ;set flag for T permutation false
+        mov     r8, ARG_LENGTH  ;store length of argument checked in r8
         add     rbp, 8 * 2      ;first program argument (L)
-        mov     rsi, arr_l
+        mov     rsi, arr_l      ;store pointer to permutation container in rsi
         call    _check_perm
         add     rbp, 8          ;second program argument (R)
-        mov     rsi, arr_r
+        mov     rsi, arr_r      ;store 
         call    _check_perm
 
         add     rbp, 8          ;third program argument (T)
         mov     rsi, arr_t
-        mov     r9, 1
+        mov     r9, 1           ;set flag for T permutation true
         call    _check_perm
 
         add     rbp, 8          ;fourth program argument (key)
-        mov     r8, 2   
-        mov     r9, 0
+        mov     r8, 2           ;set r8 to the length of key
+        mov     r9, 0           ;set flag for T permutation false again
         mov     rsi, arr_key
         call    _check_perm
         ret
 _check_perm:
-        push    rax
-        push    rbx
-        push    rcx
-        push    rdx
-        push    r10
-        mov     rbx, [rbp]     ;pointer to current letter  
+        ; push    rax
+        ; push    rbx
+        ; push    rcx
+        ; push    rdx
+        ; push    r10
+        mov     rbx, [rbp]      ;pointer to current letter  
         mov     r10, [rbp]      ;pointer to first letter
-        mov     rax, 0  ;position being checked
-        mov     rcx, 0  ;value of current letter
+        mov     rax, 0          ;position being checked
+        mov     rcx, 0          ;value of current letter
 ;.align 16
 check_perm_loop:  ;valid program arguments
         mov     cl, [rbx]
         cmp     cl, 0
-        je      check_perm_end               ;end of the loop
+        je      check_perm_end  ;end of the loop 
 
         cmp     cl, 49
-        jl      exit_1                  ;character out of the defined range
+        jl      exit_1          ;character out of the defined range - exit 1
 
         cmp     cl, 90
-        jg      exit_1                 ;character out of the defined range
+        jg      exit_1          ;character out of the defined range - exit 1
 
 check_perm_loop_T:
         cmp     r9, 0
-        je      check_perm_loop_LRT ; skip this part for R, L and key
+        je      check_perm_loop_LRT ;skip this part for R, L and key
 
         sub     rcx, 49
         cmp     rcx, rax
-        je      exit_1 ;1-element cycle is incorrect
+        je      exit_1           ;1-element cycle is incorrect - exit 1
 
         add     r10, rcx                                                        ;jump to the cl'th letter
         sub     byte [r10], 49                                                  ;adjust value of cl'th letter
@@ -318,11 +317,11 @@ check_perm_end_loop:
         inc     rdx
         cmp     rdx, 42
         jl      check_perm_end_loop ;the end of loop filling arr with 0
-        pop     r10
-        pop     rdx
-        pop     rcx
-        pop     rbx
-        pop     rax
+        ; pop     r10
+        ; pop     rdx
+        ; pop     rcx
+        ; pop     rbx
+        ; pop     rax
         ret
 
 _my_exit:
