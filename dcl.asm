@@ -1,12 +1,11 @@
 SYS_WRITE equ 1
 SYS_EXIT equ 60
 STDOUT equ 1
-MAX_LINE equ 42
 ARG_LENGTH equ 42
 ARGC equ 5
 LOW equ 49
 UP equ 90
-BUFFER_LENGTH equ 4
+BUFFER_LENGTH equ 4096
 T equ 35
 R equ 33
 L equ 27
@@ -15,22 +14,15 @@ global _start
 
 section .bss
         buffer resb BUFFER_LENGTH
-        arg_R resb 8 ;pointers to pointers to the beginning of the strings
-        arg_L resb 8
-        arg_T resb 8
-        arg_lr resb 8
         text_length resb 8
 section .data
-        arr times 42 dw 0
-        arr_r times 42 dw 0
-        arr_l times 42 dw 0
-        arr_t times 42 dw 0
-        arr_key times 2 dw 0
-        arr_r_rev times 42 dw 0
-        arr_l_rev times 42 dw 0
-
-section .rodata
-        new_line db `\n`
+        arr times 42 db 0
+        arr_r times 42 db 0
+        arr_l times 42 db 0
+        arr_t times 42 db 0
+        arr_key times 2 db 0
+        arr_r_rev times 42 db 0
+        arr_l_rev times 42 db 0
 
 section .text
 
@@ -122,7 +114,7 @@ start_loop:
         mov     [text_length], rax
         call    _encrypt
         call    _print_result
-        cmp     byte [text_length], BUFFER_LENGTH ;TODO: possible error with byte
+        cmp     qword [text_length], BUFFER_LENGTH ;TODO: possible error with byte
         je      start_loop              ;continue reading
 exit_0:
         mov     eax, SYS_EXIT
@@ -134,23 +126,13 @@ exit_1:
         syscall
 
 _read_input:
-        ; push    rdi
-        ; push    rsi
-        ; push    rdx
         mov     rax, 0
         mov     rdi, 0
         mov     rsi, buffer
         mov     rdx, BUFFER_LENGTH
         syscall
-        ; pop     rdx
-        ; pop     rsi
-        ; pop     rdi
         ret
 _encrypt:
-        ; push    rbx
-        ; push    rcx
-        ; push    rdx
-        ; push    r9
         xor     rdi, rdi
         xor     rsi, rsi
         mov     rbx, 0 ;iterator
@@ -175,7 +157,7 @@ encrypt_loop_posT:
         cmp     [r9], byte T
         jne     encrypt_loop_main
         right_shift_letter rdx, r11b ;l++ 
-
+        align   16
 encrypt_loop_main:
         mov     rsi, [arr_key] ;l value
         mov     rdi, [arr_key + 1] ;r value
@@ -206,26 +188,14 @@ encrypt_loop_main:
         jmp     encrypt_loop
 encrypt_loop_end:
         reval_arr buffer, [text_length], -49, buffer ;increase value of letters to the original one
-        ; pop     r9
-        ; pop     rdx
-        ; pop     rcx
-        ; pop     rbx
         ret
 
-;pointer to letter, pointer to array with permutiation
-
 _print_result:
-        ; push    rax
-        ; push    rdi
-        ; push    rsi
         mov     rax, SYS_WRITE
         mov     rdi, STDOUT
         mov     rsi, buffer
         mov     rdx, [text_length]
         syscall
-        ; pop     rsi
-        ; pop     rdi
-        ; pop     rax
         ret
 _check_args:
         cmp     rax, [rbp]      ;if number of arguments is invalid - exit 1
@@ -251,15 +221,10 @@ _check_args:
         call    _check_perm
         ret
 _check_perm:
-        ; push    rax
-        ; push    rbx
-        ; push    rcx
-        ; push    rdx
-        ; push    r10
         mov     rbx, [rbp]      ;pointer to current letter  
         mov     r10, [rbp]      ;pointer to first letter
-        mov     rax, 0          ;position being checked
-        mov     rcx, 0          ;value of current letter
+        xor     rcx, rcx        ;position being checked
+        xor     rax, rax        ;value of current letter
 ;.align 16
 check_perm_loop:  ;valid program arguments
         mov     cl, [rbx]
@@ -276,16 +241,14 @@ check_perm_loop_T:
         cmp     r9, 0
         je      check_perm_loop_LRT ;skip this part for R, L and key
 
-        sub     rcx, 49
+        sub     rcx, 49          ;reduce letter's value to the range of [0, 42)
         cmp     rcx, rax
         je      exit_1           ;1-element cycle is incorrect - exit 1
-
-        add     r10, rcx                                                        ;jump to the cl'th letter
-        sub     byte [r10], 49                                                  ;adjust value of cl'th letter
-        cmp     al, [r10]                                                      ;compare position of cl with value of cl'th letter                                                     
-        jne     exit_1 ;more than 2-element cycle is incorrect
-        add     byte [r10], 49                                                  ;reset value of cl'th letter
-        sub     r10, rcx ;reset pointer
+                                                       
+        sub     byte [r10 + rcx], 49 ;adjust value of rcx'th letter                                                 
+        cmp     al, [r10 + rcx]      ;compare position of cl with value of cl'th letter                                                     
+        jne     exit_1               ;more than 2-elements cycle is incorrect
+        add     byte [r10 + rcx], 49 ;reset value of cl'th letter
 
         add     cl, 49
 check_perm_loop_LRT:
@@ -293,11 +256,11 @@ check_perm_loop_LRT:
         je      check_perm_loop_inc ;skip this part for key
 
         mov     rdx, arr
-        add     rdx, rcx
+        add     rdx, rcx        ;jump to letter's place in occurences array
         sub     rdx, 49     
-        cmp     byte [rdx], 0
+        cmp     byte [rdx], 0   ;if the letter have already appeared - exit 1
         jne     exit_1
-        mov     byte [rdx], 1
+        mov     byte [rdx], 1   ;notice, that letter appeared
         add     rdx, 49
         sub     rdx, rcx
 check_perm_loop_inc:
@@ -310,21 +273,16 @@ check_perm_loop_inc:
 
 check_perm_end:
         cmp     rax, r8
-        jne     exit_1
+        jne     exit_1 ;exit_1 ;???
         mov     rdx, 0
 check_perm_end_loop:
         mov     byte [arr + rdx], 0
         inc     rdx
         cmp     rdx, 42
         jl      check_perm_end_loop ;the end of loop filling arr with 0
-        ; pop     r10
-        ; pop     rdx
-        ; pop     rcx
-        ; pop     rbx
-        ; pop     rax
         ret
 
 _my_exit:
-        mov     rdi, rbx
+        mov     rdi, r8
         mov     eax, SYS_EXIT
         syscall
