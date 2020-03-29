@@ -102,7 +102,7 @@ start_loop:
         call    _encrypt
         call    _print_result
         cmp     qword r12, BUFFER_LENGTH ;TODO: possible error with byte
-        je      start_loop              ;continue reading
+        je      start_loop              ;continue processing
 exit_0:
         mov     eax, SYS_EXIT
         xor     edi, edi
@@ -120,13 +120,9 @@ _read_input:
         syscall
         ret
 _encrypt:
-        xor     r8, r8
-        xor     rdi, rdi
-        xor     rsi, rsi
-        xor     r11, r11
-        xor     r13, r13
-        mov     rbx, 0 ;iterator
+        xor     rbx, rbx ;iterator
         reval_arr buffer, r12, LOW, buffer ;decrease value of letters to [0;42)
+
         lea     rdx, [arr_key] ;l pointer
         lea     r9, [arr_key + 1] ;r pointer
 
@@ -136,27 +132,21 @@ encrypt_loop:
         cmp     rbx, r12
         je      encrypt_loop_end ;end the loop if iterator reaches text length
 
-        mov     r13, sil
+        mov     r13b, sil
         mov     r11, 1
-        right_shift_letter sil, r11b, esi
+        right_shift_letter r13b, r11b, r13d
         right_shift_letter dil, r11b, edi ;r++ 
 encrypt_loop_posR:
         cmp     byte dil, R
-        jne     encrypt_loop_posL
-        right_shift_letter sil, r11b, esi ;l++
+        cmove   esi, r13d;l++
 encrypt_loop_posL:
         cmp     byte dil, L
-        jne     encrypt_loop_posT
-        right_shift_letter sil, r11b, esi ; l++
+        cmove   esi, r13d;l++
 encrypt_loop_posT:
         cmp     byte dil, T
-        jne     encrypt_loop_main
-        right_shift_letter sil, r11b, esi ;l++ 
-        ;align   16
+        cmove   esi, r13d;l++
+        align   16
 encrypt_loop_main:
-        mov     [rdx], sil ;actualize l
-        mov     [r9], dil ; actualize r
-
         mov     r8b,  [buffer + rbx] ;move poiner to the encrypted char to r8b
 
         cmp     byte r8b, 0 ;user input validation
@@ -271,7 +261,7 @@ check_perm_loop_inc:
 
 check_perm_end:
         cmp     rax, r8
-        jne     exit_1 ;exit_1 ;???
+        jne     exit_1
         mov     rdx, 0
 check_perm_end_loop:
         mov     byte [arr + rdx], 0
