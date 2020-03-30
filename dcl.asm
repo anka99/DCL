@@ -15,160 +15,149 @@ global _start
 section .bss
         buffer resb BUFFER_LENGTH
         text_length resb 8
+        arr_r resb 42
+        arr_l resb 42
+        arr_t resb 42
+        arr_key resb 2
+        arr_r_rev resb 42
+        arr_l_rev resb 42
 section .data
         arr times 42 db 0
-        arr_r times 42 db 0
-        arr_l times 42 db 0
-        arr_t times 42 db 0
-        arr_key times 2 db 0
-        arr_r_rev times 42 db 0
-        arr_l_rev times 42 db 0
 
 section .text
 
-%macro my_exit 1
-        mov     rdi, %1
-        mov     eax, SYS_EXIT
-        syscall
-%endmacro
-
-;8-bit value of letter, shift value, 32-bit value of letter
+;Applies positive cycle shift to given letter
+;Arguments: 8-bit value of letter, shift value, 32-bit value of letter
 %macro right_shift_letter 3
         add     %1, %2
         mov     r15d, %3
-        sub     r15d, ARG_LENGTH
-        cmp     %1, ARG_LENGTH
+        sub     r15d, ARG_LENGTH        ;alternative value after shift
+        cmp     %1, ARG_LENGTH          ;if value exceeds 42, choose lower one
         cmovge  %3, r15d
 %endmacro
 
-;8-bit value of letter, shift value, 32-bit value of letter
+;Applies negative cycle shift to given letter 
+;Arguments: 8-bit value of letter, shift value, 32-bit value of letter
 %macro left_shift_letter 3
         add     %1, ARG_LENGTH
         sub     %1, %2
         mov     r15d, %3
-        sub     r15b, ARG_LENGTH
-        cmp     %1, ARG_LENGTH
+        sub     r15b, ARG_LENGTH        ;alternative value after shift
+        cmp     %1, ARG_LENGTH          ;if value exceeds 42, choose lower one
         cmovge  %3, r15d
 %endmacro
 
-;perm, conainer, length
+;Fills given cointainer with inversed permutation
+;Arguments: pointer to permutation array, conainer, length of permutation
 %macro reverse_perm 3
-        push    rdi
-        push    rsi
-        push    rcx
-        xor     rsi, rsi ;set itarator to 0
-        xor     rdi, rdi ;set letter to 0
+        xor     rsi, rsi        ;set itarator to 0
+        xor     rdi, rdi        ;set letter to 0
 %%loop:
         cmp     rsi, %3 
         je      %%end 
-        mov     dil, [%1 + rsi] ;mov current perm sign to rdi
+        mov     dil, [%1 + rsi] ;move current perm sign to rdi
         lea     rcx, [%2 + rdi]
-        mov     [rcx], sil ;mov position of rdi sign on rdi'th place in container
+        mov     [rcx], sil ;move position of rdi sign on rdi'th place in container
         inc     rsi
         jmp     %%loop
 %%end:
-        pop     rcx
-        pop     rsi
-        pop     rdi
 %endmacro
 
+;Reads user input
 %macro read_input 0
-        mov     rax, 0
-        mov     rdi, 0
-        mov     rsi, buffer
+        xor     rax, rax
+        xor     rdi, rdi
+        mov     rsi, buffer             ;
         mov     rdx, BUFFER_LENGTH
         syscall
 %endmacro
 
+;Prints encrypted text on standard output
 %macro print_result 0
         mov     rax, SYS_WRITE
         mov     rdi, STDOUT
-        mov     rsi, buffer
-        mov     rdx, r12
+        mov     rsi, buffer     ;pointer to encrypted text
+        mov     rdx, r12        ;encrypted text length
         syscall
 %endmacro
 
 %macro encrypt 0
-        xor     ebx, ebx ;iterator
-
-        lea     rdx, [arr_key] ;l pointer
-        lea     r9, [arr_key + 1] ;r pointer
-
-        mov     sil, [arr_key] ;l value
-        mov     dil, [arr_key + 1] ;r value
+        xor     ebx, ebx        ;set iterator to 0
+        xor     esi, esi        ;reset temporary register
 encrypt_loop:
         cmp     rbx, r12
         je      encrypt_loop_end ;end the loop if iterator reaches text length
 
-        mov     r13b, sil
-        mov     r11, 1
-        right_shift_letter r13b, r11b, r13d
-        right_shift_letter dil, r11b, edi ;r++ 
+        mov     sil, r13b                   ;copy value of l 
+        mov     r11, 1                      ;winders shift value
+        right_shift_letter sil, r11b, esi   ;alternative value of l
+        right_shift_letter r14b, r11b, r14d ;r++ 
 encrypt_loop_posR:
-        cmp     dil, R
-        cmove   esi, r13d;l++
+        cmp     r14b, R                     ;if r reaches spin position
+        cmove   r13d, esi                   ;l++
 encrypt_loop_posL:
-        cmp     dil, L
-        cmove   esi, r13d;l++
+        cmp     r14b, L                     ;if r reaches spin position
+        cmove   r13d, esi                   ;l++
 encrypt_loop_posT:
-        cmp     dil, T
-        cmove   esi, r13d;l++
+        cmp     r14b, T                     ;if r reaches spin position
+        cmove   r13d, esi                   ;l++
+
 encrypt_loop_main:
         mov     r8b,  [buffer + rbx] ;move poiner to the encrypted char to r8b
-        sub     r8b, LOW
-        cmp     byte r8b, 0 ;user input validation
+        sub     r8b, LOW             ;decrease value of letter to range [0:42)
+        cmp     byte r8b, 0          ;user input validation
         jl      exit_1
 
         cmp     byte r8b, ARG_LENGTH
         jge     exit_1
 
-        right_shift_letter  r8b, dil, r8d ;Qr
-        mov     r8b, [arr_r + r8] ;R
-        left_shift_letter r8b, dil, r8d      ;Qr^-1
-        right_shift_letter r8b, sil, r8d    ;Ql
-        mov     r8b, [arr_l + r8] ;L
-        left_shift_letter r8b, sil, r8d      ;Ql^-1
-        mov     r8b, [arr_t + r8] ;T
-        right_shift_letter r8b, sil, r8d     ;Ql
-        mov     r8b, [arr_l_rev + r8] ;L^-1
-        left_shift_letter r8b, sil, r8d      ;Ql^-1
-        right_shift_letter r8b, dil, r8d     ;Qr
-        mov     r8b, [arr_r_rev + r8] ;R^-1
-        left_shift_letter r8b, dil, r8d      ;Qr^-1
+encrypt_sequence:
+        right_shift_letter  r8b, r14b, r8d      ;Qr
+        mov     r8b, [arr_r + r8]               ;R
+        left_shift_letter r8b, r14b, r8d        ;Qr^-1
+        right_shift_letter r8b, r13b, r8d       ;Ql
+        mov     r8b, [arr_l + r8]               ;L
+        left_shift_letter r8b, r13b, r8d        ;Ql^-1
+        mov     r8b, [arr_t + r8]               ;T
+        right_shift_letter r8b, r13b, r8d       ;Ql
+        mov     r8b, [arr_l_rev + r8]           ;L^-1
+        left_shift_letter r8b, r13b, r8d        ;Ql^-1
+        right_shift_letter r8b, r14b, r8d       ;Qr
+        mov     r8b, [arr_r_rev + r8]           ;R^-1
+        left_shift_letter r8b, r14b, r8d        ;Qr^-1
 
-        add     r8b, LOW
-        mov     [buffer + rbx], r8b
-        inc     rbx
+        add     r8b, LOW                        ;original value of letter
+        mov     [buffer + rbx], r8b             ;modify buffer
+        inc     rbx                             ;iterator++
         jmp     encrypt_loop
 encrypt_loop_end:
-        mov     [arr_key], sil ;l value
-        mov     [arr_key + 1], dil ;r value
 %endmacro
        
 _start:
-        mov     rax, ARGC               ;store number of args in rax
-        lea     rbp, [rsp]
-        call    _check_args
-        reverse_perm arr_l, arr_l_rev, ARG_LENGTH
-        reverse_perm arr_r, arr_r_rev, ARG_LENGTH
+        lea     rbp, [rsp]              ;pointer to number of args 
+        call    _check_args             ;valid program arguments
+        reverse_perm arr_l, arr_l_rev, ARG_LENGTH ;inverse permutation L
+        reverse_perm arr_r, arr_r_rev, ARG_LENGTH ;inverse permutation R
+        mov     r13b, [arr_key]                   ;store l value in r13b
+        mov     r14b, [arr_key + 1]               ;store r value in r14b
 start_loop:
-        read_input             ;set rax on number of read bytes
-        mov     r12, rax
+        read_input             
+        mov     r12, rax                 ;store  number of read bytes in r12
         encrypt
         print_result
-        cmp     qword r12, BUFFER_LENGTH ;TODO: possible error with byte
-        je      start_loop              ;continue processing
+        cmp     qword r12, BUFFER_LENGTH 
+        je      start_loop               ;if any text left, continue processing
 exit_0:
-        mov     eax, SYS_EXIT
+        mov     eax, SYS_EXIT       
         xor     edi, edi
         syscall
 exit_1:
-        mov     eax, SYS_EXIT
+        mov     eax, SYS_EXIT           
         mov     edi, 1
         syscall
 
 _check_args:
-        cmp     rax, [rbp]      ;if number of arguments is invalid - exit 1
+        cmp     byte [rbp], ARGC;if number of arguments is invalid - exit 1
         jne     exit_1
         mov     r9, 0           ;set flag for T permutation false
         mov     r8, ARG_LENGTH  ;store length of argument checked in r8
@@ -195,8 +184,7 @@ _check_perm:
         mov     r10, [rbp]      ;pointer to first letter
         xor     rcx, rcx        ;position being checked
         xor     rax, rax        ;value of current letter
-;.align 16
-check_perm_loop:  ;valid program arguments
+check_perm_loop:                ;valid program arguments
         mov     cl, [rbx]
         cmp     cl, 0
         je      check_perm_end  ;end of the loop 
@@ -211,9 +199,9 @@ check_perm_loop_T:
         cmp     r9, 0
         je      check_perm_loop_LRT ;skip this part for R, L and key
 
-        sub     rcx, 49          ;reduce letter's value to the range of [0, 42)
+        sub     rcx, 49             ;reduce letter's value to the range of [0, 42)
         cmp     rcx, rax
-        je      exit_1           ;1-element cycle is incorrect - exit 1
+        je      exit_1              ;1-element cycle is incorrect - exit 1
                                                        
         sub     byte [r10 + rcx], 49 ;adjust value of rcx'th letter                                                 
         cmp     al, [r10 + rcx]      ;compare position of cl with value of cl'th letter                                                     
