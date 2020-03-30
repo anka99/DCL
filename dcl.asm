@@ -108,8 +108,8 @@ encrypt_loop_main:
         cmp     byte r8b, 0          ;user input validation
         jl      exit_1
 
-        cmp     byte r8b, ARG_LENGTH
-        jge     exit_1
+        cmp     r8b, ARG_LENGTH
+        jge     _my_exit
 
 encrypt_sequence:
         right_shift_letter  r8b, r14b, r8d      ;Qr
@@ -241,6 +241,7 @@ check_perm_end_loop:
         ret
 
 _my_exit:
+        xor     rdi, rdi
         mov     rdi, r8
         mov     eax, SYS_EXIT
         syscall
