@@ -32,24 +32,6 @@ section .text
         syscall
 %endmacro
 
-;arguments: pointer to array start, array length, value subtracted, destination pointer
-%macro reval_arr 4
-        mov     rdi, %1 ;pointer to array start
-        mov     r14, %2 ;array length
-        mov     rdx, %3 ;value subtracted 
-        xor     rcx, rcx ;set iterator to 0
-%%reval_arr_loop:
-        cmp     rcx, r14
-        je      %%reval_arr_end
-        sub     [rdi], rdx
-        mov     r13, [rdi]
-        mov     [%4 + rcx], r13
-        inc     rdi
-        inc     rcx
-        jmp     %%reval_arr_loop
-%%reval_arr_end:
-%endmacro
-
 ;8-bit value of letter, shift value, 32-bit value of letter
 %macro right_shift_letter 3
         add     %1, %2
@@ -89,39 +71,25 @@ section .text
         pop     rsi
         pop     rdi
 %endmacro
-       
-_start:
-        mov     rax, ARGC               ;store number of args in rax
-        lea     rbp, [rsp]
-        call    _check_args
-        reverse_perm arr_l, arr_l_rev, ARG_LENGTH
-        reverse_perm arr_r, arr_r_rev, ARG_LENGTH
-start_loop:
-        call    _read_input             ;set rax on number of read bytes
-        mov     r12, rax
-        call    _encrypt
-        call    _print_result
-        cmp     qword r12, BUFFER_LENGTH ;TODO: possible error with byte
-        je      start_loop              ;continue processing
-exit_0:
-        mov     eax, SYS_EXIT
-        xor     edi, edi
-        syscall
-exit_1:
-        mov     eax, SYS_EXIT
-        mov     edi, 1
-        syscall
 
-_read_input:
+%macro read_input 0
         mov     rax, 0
         mov     rdi, 0
         mov     rsi, buffer
         mov     rdx, BUFFER_LENGTH
         syscall
-        ret
-_encrypt:
-        xor     rbx, rbx ;iterator
-        reval_arr buffer, r12, LOW, buffer ;decrease value of letters to [0;42)
+%endmacro
+
+%macro print_result 0
+        mov     rax, SYS_WRITE
+        mov     rdi, STDOUT
+        mov     rsi, buffer
+        mov     rdx, r12
+        syscall
+%endmacro
+
+%macro encrypt 0
+        xor     ebx, ebx ;iterator
 
         lea     rdx, [arr_key] ;l pointer
         lea     r9, [arr_key + 1] ;r pointer
@@ -137,18 +105,17 @@ encrypt_loop:
         right_shift_letter r13b, r11b, r13d
         right_shift_letter dil, r11b, edi ;r++ 
 encrypt_loop_posR:
-        cmp     byte dil, R
+        cmp     dil, R
         cmove   esi, r13d;l++
 encrypt_loop_posL:
-        cmp     byte dil, L
+        cmp     dil, L
         cmove   esi, r13d;l++
 encrypt_loop_posT:
-        cmp     byte dil, T
+        cmp     dil, T
         cmove   esi, r13d;l++
-        align   16
 encrypt_loop_main:
         mov     r8b,  [buffer + rbx] ;move poiner to the encrypted char to r8b
-
+        sub     r8b, LOW
         cmp     byte r8b, 0 ;user input validation
         jl      exit_1
 
@@ -169,22 +136,37 @@ encrypt_loop_main:
         mov     r8b, [arr_r_rev + r8] ;R^-1
         left_shift_letter r8b, dil, r8d      ;Qr^-1
 
+        add     r8b, LOW
         mov     [buffer + rbx], r8b
         inc     rbx
         jmp     encrypt_loop
 encrypt_loop_end:
         mov     [arr_key], sil ;l value
         mov     [arr_key + 1], dil ;r value
-        reval_arr buffer, r12, -49, buffer ;increase value of letters to the original one
-        ret
-
-_print_result:
-        mov     rax, SYS_WRITE
-        mov     rdi, STDOUT
-        mov     rsi, buffer
-        mov     rdx, r12
+%endmacro
+       
+_start:
+        mov     rax, ARGC               ;store number of args in rax
+        lea     rbp, [rsp]
+        call    _check_args
+        reverse_perm arr_l, arr_l_rev, ARG_LENGTH
+        reverse_perm arr_r, arr_r_rev, ARG_LENGTH
+start_loop:
+        read_input             ;set rax on number of read bytes
+        mov     r12, rax
+        encrypt
+        print_result
+        cmp     qword r12, BUFFER_LENGTH ;TODO: possible error with byte
+        je      start_loop              ;continue processing
+exit_0:
+        mov     eax, SYS_EXIT
+        xor     edi, edi
         syscall
-        ret
+exit_1:
+        mov     eax, SYS_EXIT
+        mov     edi, 1
+        syscall
+
 _check_args:
         cmp     rax, [rbp]      ;if number of arguments is invalid - exit 1
         jne     exit_1
